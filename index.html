@@ -89,6 +89,11 @@
   .copy { font-size: 13px; font-weight: 700; color: #3a4a6b; background: rgba(58,74,107,.08); border: none; cursor: pointer; margin-top: 8px; padding: 6px 12px; border-radius: 10px; flex-shrink:0; }
   .tag { font-size: 12px; color: #3a4a6b; background: rgba(58,74,107,.1); padding: 5px 11px; border-radius: 12px; }
   .empty { text-align: center; padding: 60px 20px; color: #9aaa9a; font-size: 14px; }
+  .spinner { width: 38px; height: 38px; border: 3px solid rgba(58,74,107,.15); border-top-color: #3a4a6b; border-radius: 50%; margin: 0 auto; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .cap, .item { animation: fadeIn .25s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .chip, .btn, .copy { transition: background .15s ease, transform .1s ease; }
   .right { border-radius: 28px; padding: 24px; min-height: 420px; }
   .status { font-size:12px; color:#7a8a7a; margin-top:8px; word-break:break-all; }
 
@@ -148,54 +153,69 @@ const formulas = [
 
 let state = { tone: tones[0], goal: goals[0], formula: formulas[0].id, videoFile: null, videoUrl: null, desc: "", loading: false, status:"", result: null, error: "" };
 
-function setS(p){ Object.assign(state,p); render(); }
+function setS(p){
+  // Tối ưu mượt: nếu chỉ đổi mỗi status lúc đang tải, cập nhật riêng chữ đó
+  // thay vì vẽ lại toàn bộ trang (tránh giật + mất focus trên iPhone).
+  const onlyStatus = Object.keys(p).length === 1 && "status" in p && state.loading;
+  Object.assign(state,p);
+  if(onlyStatus){
+    const el = document.getElementById("statusText");
+    if(el){ el.textContent = state.status; return; }
+  }
+  render();
+}
+
+// Upload binary tới Worker, có theo dõi % tiến trình (XHR hỗ trợ, fetch thì không)
+function uploadWithProgress(file, onProgress){
+  return new Promise((resolve, reject)=>{
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", WORKER_URL + "?action=upload");
+    xhr.setRequestHeader("Content-Type","application/octet-stream");
+    xhr.setRequestHeader("X-Mime-Type", file.type || "video/mp4");
+    xhr.setRequestHeader("X-Size-Bytes", String(file.size));
+    xhr.upload.onprogress = (e)=>{ if(e.lengthComputable) onProgress(Math.round(e.loaded/e.total*100)); };
+    xhr.onload = ()=>{ try{ resolve(JSON.parse(xhr.responseText)); }catch{ reject(new Error("Phản hồi không hợp lệ")); } };
+    xhr.onerror = ()=> reject(new Error("Mất kết nối khi tải video"));
+    xhr.ontimeout = ()=> reject(new Error("Tải video quá lâu, thử video nhẹ hơn"));
+    xhr.timeout = 180000; // 3 phút
+    xhr.send(file);
+  });
+}
 
 async function run(){
   if(!state.videoFile){ setS({error:"Vui lòng tải video lên trước."}); return; }
   if(WORKER_URL.includes("YOUR-WORKER")){ setS({error:"Bạn chưa dán URL Worker vào file (biến WORKER_URL)."}); return; }
-  setS({loading:true,error:"",result:null,status:"Đang chuẩn bị tải video..."});
+
+  // Cảnh báo sớm nếu video quá nặng (chặn trước khi tải, đỡ chờ vô ích)
+  const MB = state.videoFile.size / (1024*1024);
+  if(MB > 80){ setS({error:`Video nặng ${MB.toFixed(0)}MB — quá lớn. Hãy dùng video reel ngắn dưới ~80MB.`}); return; }
+
+  setS({loading:true,error:"",result:null,status:"Đang tải video lên... 0%"});
   try{
-    const file = state.videoFile;
-
-    // 1) Xin "vé" upload từ Worker (Worker giữ key, chỉ trả về link upload)
-    let r = await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({action:"start-upload",mimeType:file.type,sizeBytes:file.size})});
-    let s1 = await r.json();
-    if(s1.error || !s1.uploadUrl){ throw new Error(s1.error||"Không lấy được link upload"); }
-
-    // 2) Upload video TRỰC TIẾP lên Gemini (không base64, không qua Worker => file lớn OK)
-    setS({status:"Đang tải video lên..."});
-    let up = await fetch(s1.uploadUrl,{
-      method:"POST",
-      headers:{
-        "Content-Length": String(file.size),
-        "X-Goog-Upload-Offset": "0",
-        "X-Goog-Upload-Command": "upload, finalize"
-      },
-      body: file   // gửi thẳng file, trình duyệt stream lên
+    // 1) Upload video (có %)
+    const upInfo = await uploadWithProgress(state.videoFile, (pct)=>{
+      setS({status:`Đang tải video lên... ${pct}%`});
     });
-    let upInfo = await up.json();
-    const fileName = upInfo?.file?.name;
-    if(!fileName){ throw new Error("Upload video thất bại"); }
+    if(upInfo.error || !upInfo.name){ throw new Error(upInfo.error||"Upload video thất bại"); }
 
-    // 3) Chờ video xử lý xong (ACTIVE)
+    // 2) Chờ Gemini xử lý — polling thông minh: nhanh lúc đầu, giãn dần
     setS({status:"Gemini đang xử lý video..."});
-    let info = upInfo.file;
-    let tries = 0;
+    let info = upInfo, tries = 0;
+    const delays = [1000,1500,2000,2500,3000];
     while(info.state !== "ACTIVE" && tries < 40){
-      await new Promise(s=>setTimeout(s,2000));
-      r = await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({action:"status",name:fileName})});
+      await new Promise(s=>setTimeout(s, delays[Math.min(tries,delays.length-1)]));
+      const r = await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"status",name:upInfo.name})});
       info = await r.json();
       tries++;
     }
     if(info.state !== "ACTIVE"){ throw new Error("Video xử lý quá lâu, thử video ngắn hơn."); }
 
-    // 4) Phân tích & viết content
+    // 3) Phân tích & viết content
     setS({status:"Chuyên gia AI đang viết content..."});
-    r = await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},
+    const r = await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({action:"analyze",fileUri:info.uri,mimeType:info.mimeType,desc:state.desc,tone:state.tone,goal:state.goal,formula:state.formula})});
-    let out = await r.json();
+    const out = await r.json();
     if(out.error){ throw new Error(out.error); }
     const parsed = safeParse(out.raw);
     if(!parsed){ throw new Error("AI trả dữ liệu chưa đầy đủ, hãy thử lại hoặc dùng video ngắn hơn."); }
@@ -228,7 +248,7 @@ function safeParse(raw){
 function render(){
   const s = state;
   const resHtml = s.loading
-    ? `<div class="empty">⏳ ${s.status||"Đang xử lý..."}</div>`
+    ? `<div class="empty"><div class="spinner"></div><div id="statusText" style="margin-top:14px">${s.status||"Đang xử lý..."}</div></div>`
     : s.result ? renderResult(s.result)
     : `<div class="empty">🎬 Tải video và nhấn phân tích để nhận content do chuyên gia AI viết.</div>`;
 
