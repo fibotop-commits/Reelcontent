@@ -150,36 +150,48 @@ let state = { tone: tones[0], goal: goals[0], formula: formulas[0].id, videoFile
 
 function setS(p){ Object.assign(state,p); render(); }
 
-async function fileToBase64(file){
-  return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result.split(",")[1]); r.onerror=rej; r.readAsDataURL(file); });
-}
-
 async function run(){
   if(!state.videoFile){ setS({error:"Vui lòng tải video lên trước."}); return; }
   if(WORKER_URL.includes("YOUR-WORKER")){ setS({error:"Bạn chưa dán URL Worker vào file (biến WORKER_URL)."}); return; }
-  setS({loading:true,error:"",result:null,status:"Đang tải video lên..."});
+  setS({loading:true,error:"",result:null,status:"Đang chuẩn bị tải video..."});
   try{
-    const b64 = await fileToBase64(state.videoFile);
-    // 1) upload
-    let r = await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({action:"upload",dataBase64:b64,mimeType:state.videoFile.type,sizeBytes:state.videoFile.size})});
-    let up = await r.json();
-    if(up.error){ throw new Error(up.error+(up.detail?": "+up.detail:"")); }
+    const file = state.videoFile;
 
-    // 2) chờ video ACTIVE
+    // 1) Xin "vé" upload từ Worker (Worker giữ key, chỉ trả về link upload)
+    let r = await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({action:"start-upload",mimeType:file.type,sizeBytes:file.size})});
+    let s1 = await r.json();
+    if(s1.error || !s1.uploadUrl){ throw new Error(s1.error||"Không lấy được link upload"); }
+
+    // 2) Upload video TRỰC TIẾP lên Gemini (không base64, không qua Worker => file lớn OK)
+    setS({status:"Đang tải video lên..."});
+    let up = await fetch(s1.uploadUrl,{
+      method:"POST",
+      headers:{
+        "Content-Length": String(file.size),
+        "X-Goog-Upload-Offset": "0",
+        "X-Goog-Upload-Command": "upload, finalize"
+      },
+      body: file   // gửi thẳng file, trình duyệt stream lên
+    });
+    let upInfo = await up.json();
+    const fileName = upInfo?.file?.name;
+    if(!fileName){ throw new Error("Upload video thất bại"); }
+
+    // 3) Chờ video xử lý xong (ACTIVE)
     setS({status:"Gemini đang xử lý video..."});
-    let info = up;
+    let info = upInfo.file;
     let tries = 0;
-    while(info.state !== "ACTIVE" && tries < 30){
+    while(info.state !== "ACTIVE" && tries < 40){
       await new Promise(s=>setTimeout(s,2000));
       r = await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({action:"status",name:up.name})});
+        body:JSON.stringify({action:"status",name:fileName})});
       info = await r.json();
       tries++;
     }
     if(info.state !== "ACTIVE"){ throw new Error("Video xử lý quá lâu, thử video ngắn hơn."); }
 
-    // 3) phân tích
+    // 4) Phân tích & viết content
     setS({status:"Chuyên gia AI đang viết content..."});
     r = await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({action:"analyze",fileUri:info.uri,mimeType:info.mimeType,desc:state.desc,tone:state.tone,goal:state.goal,formula:state.formula})});
