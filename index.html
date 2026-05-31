@@ -59,6 +59,9 @@
   .sub { font-size: 11px; letter-spacing: 2px; color: #7a8a7a; font-weight: 600; }
   .live { padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: 700; color: #3a7a4a; display: flex; align-items: center; gap: 6px; flex-shrink:0; }
   .dot { width: 8px; height: 8px; border-radius: 8px; background: #3a7a4a; display: inline-block; }
+  .mode-bar { border-radius: 22px; padding: 6px; display: flex; gap: 6px; margin-bottom: 22px; }
+  .mode-btn { flex: 1; padding: 13px; border-radius: 16px; border: none; cursor: pointer; font-size: 14px; font-weight: 700; background: transparent; color: #5a6a5a; transition: all .15s ease; }
+  .mode-btn.on { background: #3a4a6b; color: #fff; box-shadow: 0 4px 14px rgba(58,74,107,.25); }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: start; }
   .col { display: flex; flex-direction: column; gap: 22px; }
   .card { border-radius: 28px; padding: 24px; }
@@ -123,6 +126,10 @@ const WORKER_URL = "https://toulousereel.hongphi130894.workers.dev";
 const tones = ["Cảm xúc / Storytelling","Trẻ trung / Hài hước","Sang trọng / Tinh tế","Bán hàng trực tiếp","Truyền cảm hứng"];
 const goals = ["Tăng tương tác & comment","Chốt đơn / Bán hàng","Tăng nhận diện thương hiệu","Kêu gọi đặt bánh"];
 
+// Bộ tùy chọn riêng cho chế độ CÁ NHÂN (viết status FB cá nhân)
+const tonesPersonal = ["Tâm trạng / Sâu lắng","Hài hước / Bắt trend","Chữa lành / Tích cực","Đời thường / Chân thật","Cà khịa / Deep nhẹ"];
+const goalsPersonal = ["Nhiều like & comment","Kể chuyện đời thường","Thả thính / Gây chú ý","Truyền cảm hứng","Khoe khoảnh khắc đẹp"];
+
 // Các công thức copywriting + giải thích + ví dụ cụ thể cho bánh sinh nhật Toulouse
 const formulas = [
   {
@@ -159,7 +166,7 @@ const lengths = [
   { id: "Tự điền", hint: "Bạn nhập số từ mong muốn" }
 ];
 
-let state = { tone: tones[0], goal: goals[0], formula: formulas[0].id, length: lengths[0].id, customWords: "", videoFile: null, videoUrl: null, desc: "", loading: false, status:"", result: null, error: "" };
+let state = { mode: "toulouse", tone: tones[0], goal: goals[0], formula: formulas[0].id, length: lengths[0].id, customWords: "", videoFile: null, videoUrl: null, isImage: false, desc: "", loading: false, status:"", result: null, error: "" };
 
 function setS(p){
   // Tối ưu mượt: nếu chỉ đổi mỗi status lúc đang tải, cập nhật riêng chữ đó
@@ -204,20 +211,22 @@ async function run(){
     const upInfo = await uploadWithProgress(state.videoFile, (pct)=>{
       setS({status:`Đang tải video lên... ${pct}%`});
     });
-    if(upInfo.error || !upInfo.name){ throw new Error(upInfo.error||"Upload video thất bại"); }
+    if(upInfo.error || !upInfo.name){ throw new Error(upInfo.error||"Tải file thất bại"); }
 
-    // 2) Chờ Gemini xử lý — polling thông minh: nhanh lúc đầu, giãn dần
-    setS({status:"Gemini đang xử lý video..."});
+    // 2) Chờ xử lý xong (ACTIVE) — ảnh thường xong ngay, video cần chờ
     let info = upInfo, tries = 0;
-    const delays = [1000,1500,2000,2500,3000];
-    while(info.state !== "ACTIVE" && tries < 40){
-      await new Promise(s=>setTimeout(s, delays[Math.min(tries,delays.length-1)]));
-      const r = await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({action:"status",name:upInfo.name})});
-      info = await r.json();
-      tries++;
+    if(info.state !== "ACTIVE"){
+      setS({status: state.isImage ? "Đang xử lý ảnh..." : "Gemini đang xử lý video..."});
+      const delays = [800,1200,1800,2400,3000];
+      while(info.state !== "ACTIVE" && tries < 40){
+        await new Promise(s=>setTimeout(s, delays[Math.min(tries,delays.length-1)]));
+        const r = await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({action:"status",name:upInfo.name})});
+        info = await r.json();
+        tries++;
+      }
+      if(info.state !== "ACTIVE"){ throw new Error("Xử lý quá lâu, thử file nhẹ hơn."); }
     }
-    if(info.state !== "ACTIVE"){ throw new Error("Video xử lý quá lâu, thử video ngắn hơn."); }
 
     // 3) Phân tích & viết content
     setS({status:"Chuyên gia AI đang viết content..."});
@@ -227,7 +236,7 @@ async function run(){
       lengthSpec = (n && n>0) ? `khoảng ${n} từ` : "Vừa";
     }
     const r = await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({action:"analyze",fileUri:info.uri,mimeType:info.mimeType,desc:state.desc,tone:state.tone,goal:state.goal,formula:state.formula,length:lengthSpec})});
+      body:JSON.stringify({action:"analyze",fileUri:info.uri,mimeType:info.mimeType,desc:state.desc,tone:state.tone,goal:state.goal,formula:state.formula,length:lengthSpec,mode:state.mode})});
     const out = await r.json();
     if(out.error){ throw new Error(out.error); }
     const parsed = safeParse(out.raw);
@@ -270,34 +279,42 @@ function render(){
     <div class="glass header">
       <div style="display:flex;align-items:center;gap:14px">
         <div class="logo">🎬</div>
-        <div><div class="title">Reel Studio AI</div><div class="sub">TOULOUSE — CONTENT GENERATOR</div></div>
+        <div><div class="title">${s.mode==="personal"?"Viral Status AI":"Reel Studio AI"}</div><div class="sub">${s.mode==="personal"?"CÁ NHÂN — FACEBOOK VIRAL":"TOULOUSE — CONTENT GENERATOR"}</div></div>
       </div>
       <div class="glass live"><span class="dot"></span> GEMINI</div>
+    </div>
+
+    <div class="glass mode-bar">
+      <button class="mode-btn ${s.mode==="toulouse"?"on":""}" onclick="switchMode('toulouse')">🎂 Toulouse — Bán hàng</button>
+      <button class="mode-btn ${s.mode==="personal"?"on":""}" onclick="switchMode('personal')">✍️ Cá nhân — Viral FB</button>
     </div>
     <div class="grid">
       <div class="col">
         <div class="glass card">
-          <div class="label">TẢI VIDEO LÊN</div>
+          <div class="label">${s.mode==="personal"?"TẢI ẢNH HOẶC VIDEO LÊN":"TẢI VIDEO LÊN"}</div>
           ${s.videoUrl
-            ? `<video src="${s.videoUrl}" controls></video><div class="status">${s.videoFile?.name||""}</div>`
-            : `<div class="drop" onclick="document.getElementById('f').click()"><div style="font-size:34px">⬆️</div><b>Nhấn để chọn video</b><br><span>MP4, MOV, WebM — nên dưới 20MB</span></div>`}
-          <input id="f" type="file" accept="video/*" style="display:none" onchange="onFile(event)">
+            ? (s.isImage
+                ? `<img src="${s.videoUrl}" style="width:100%;border-radius:18px;display:block"><div class="status">${s.videoFile?.name||""}</div>`
+                : `<video src="${s.videoUrl}" controls></video><div class="status">${s.videoFile?.name||""}</div>`)
+            : `<div class="drop" onclick="document.getElementById('f').click()"><div style="font-size:34px">⬆️</div><b>Nhấn để chọn ${s.mode==="personal"?"ảnh / video":"video"}</b><br><span>${s.mode==="personal"?"JPG, PNG, MP4, MOV":"MP4, MOV, WebM"} — nên dưới ~50MB</span></div>`}
+          <input id="f" type="file" accept="${s.mode==="personal"?"image/*,video/*":"video/*"}" style="display:none" onchange="onFile(event)">
         </div>
         <div class="glass card">
           <div class="label">MÔ TẢ VIDEO (tuỳ chọn)</div>
           <textarea id="desc" placeholder="VD: Quá trình trang trí bánh kem dâu 2 tầng cho sinh nhật bé gái..." oninput="state.desc=this.value">${s.desc}</textarea>
           <div class="mini">TÔNG GIỌNG</div>
-          <div class="chips">${tones.map(t=>`<button class="chip ${s.tone===t?'on':''}" onclick="setS({tone:'${t}'})">${t}</button>`).join("")}</div>
+          <div class="chips">${(s.mode==="personal"?tonesPersonal:tones).map(t=>`<button class="chip ${s.tone===t?'on':''}" onclick="setS({tone:'${t}'})">${t}</button>`).join("")}</div>
+          ${s.mode==="personal" ? "" : `
           <div class="mini">CÔNG THỨC VIẾT</div>
           <div class="chips">${formulas.map(f=>`<button class="chip ${s.formula===f.id?'on':''}" onclick="setS({formula:'${f.id}'})">${f.id}</button>`).join("")}</div>
-          ${(()=>{ const f=formulas.find(x=>x.id===s.formula); return `<div class="formula-box"><div class="formula-desc">${f.desc}</div><div class="formula-ex"><b>Ví dụ:</b> ${f.example}</div></div>`; })()}
+          ${(()=>{ const f=formulas.find(x=>x.id===s.formula); return `<div class="formula-box"><div class="formula-desc">${f.desc}</div><div class="formula-ex"><b>Ví dụ:</b> ${f.example}</div></div>`; })()}`}
           <div class="mini">ĐỘ DÀI CONTENT</div>
           <div class="chips">${lengths.map(l=>`<button class="chip ${s.length===l.id?'on':''}" onclick="setS({length:'${l.id}'})">${l.id}</button>`).join("")}</div>
           ${s.length==="Tự điền"
             ? `<input id="cw" type="number" min="10" max="1000" placeholder="Nhập số từ, vd: 100" value="${s.customWords}" oninput="state.customWords=this.value" style="width:100%;margin-top:10px;border-radius:14px;border:1px solid rgba(58,74,107,.15);padding:12px 14px;font-size:16px;background:rgba(255,255,255,.6);color:#2a3650">`
             : `<div class="length-hint">${lengths.find(l=>l.id===s.length).hint}</div>`}
           <div class="mini">MỤC TIÊU</div>
-          <div class="chips">${goals.map(g=>`<button class="chip ${s.goal===g?'on':''}" onclick="setS({goal:'${g}'})">${g}</button>`).join("")}</div>
+          <div class="chips">${(s.mode==="personal"?goalsPersonal:goals).map(g=>`<button class="chip ${s.goal===g?'on':''}" onclick="setS({goal:'${g}'})">${g}</button>`).join("")}</div>
           <button class="btn" ${s.loading?'disabled':''} onclick="run()">${s.loading?'⏳ Đang xử lý...':'✨ Phân tích & Viết content'}</button>
           ${s.error?`<div class="err">${s.error}</div>`:''}
         </div>
@@ -327,8 +344,17 @@ function renderResult(r){
 
 function onFile(e){
   const f = e.target.files[0]; if(!f) return;
-  state.videoFile = f; state.videoUrl = URL.createObjectURL(f); state.result=null; state.error="";
+  state.videoFile = f;
+  state.isImage = f.type.startsWith("image");
+  state.videoUrl = URL.createObjectURL(f);
+  state.result=null; state.error="";
   render();
+}
+
+function switchMode(m){
+  const t = m === "personal" ? tonesPersonal[0] : tones[0];
+  const g = m === "personal" ? goalsPersonal[0] : goals[0];
+  setS({ mode: m, tone: t, goal: g, videoFile: null, videoUrl: null, isImage: false, result: null, error: "" });
 }
 
 render();
