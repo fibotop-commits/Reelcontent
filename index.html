@@ -167,7 +167,7 @@ const lengths = [
   { id: "Tự điền", hint: "Bạn nhập số từ mong muốn" }
 ];
 
-let state = { mode: "toulouse", tone: tones[0], goal: goals[0], customTone: "", customGoal: "", formula: formulas[0].id, length: lengths[0].id, customWords: "", videoFile: null, videoUrl: null, isImage: false, desc: "", loading: false, status:"", result: null, error: "" };
+let state = { mode: "toulouse", tone: tones[0], goal: goals[0], customTone: "", customGoal: "", formula: formulas[0].id, length: lengths[0].id, customWords: "", videoFile: null, videoUrl: null, isImage: false, desc: "", loading: false, status:"", result: null, error: "", uploadedUri: null, uploadedMime: null };
 
 function setS(p){
   // Tối ưu mượt: nếu chỉ đổi mỗi status lúc đang tải, cập nhật riêng chữ đó
@@ -226,6 +226,31 @@ function uploadWithProgress(file, onProgress){
   });
 }
 
+// Gộp lỗi từ backend: ưu tiên hiện cả detail để biết Gemini nói gì (key sai, quota...)
+function errMsg(o, fallback){
+  if(!o) return fallback;
+  if(o.error && o.detail) return `${o.error} — ${o.detail}`;
+  return o.error || fallback;
+}
+
+// Gọi action analyze với file đã upload sẵn — dùng chung cho lần đầu & "Viết lại"
+async function callAnalyze(uri, mime){
+  let lengthSpec = state.length;
+  if(state.length === "Tự điền"){
+    const n = parseInt(state.customWords);
+    lengthSpec = (n && n>0) ? `khoảng ${n} từ` : "Vừa";
+  }
+  const toneSpec = state.tone === "__custom__" ? (state.customTone.trim() || "tự nhiên") : state.tone;
+  const goalSpec = state.goal === "__custom__" ? (state.customGoal.trim() || "tăng tương tác") : state.goal;
+  const r = await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({action:"analyze",fileUri:uri,mimeType:mime,desc:state.desc,tone:toneSpec,goal:goalSpec,formula:state.formula,length:lengthSpec,mode:state.mode})});
+  const out = await r.json();
+  if(out.error){ throw new Error(errMsg(out,"Lỗi phân tích")); }
+  const parsed = safeParse(out.raw);
+  if(!parsed){ throw new Error("AI trả dữ liệu chưa đầy đủ, hãy thử lại hoặc dùng video ngắn hơn."); }
+  return parsed;
+}
+
 async function run(){
   if(!state.videoFile){ setS({error:"Vui lòng tải video lên trước."}); return; }
   if(WORKER_URL.includes("YOUR-WORKER")){ setS({error:"Bạn chưa dán URL Worker vào file (biến WORKER_URL)."}); return; }
@@ -237,13 +262,14 @@ async function run(){
   const MB = state.videoFile.size / (1024*1024);
   if(MB > 80){ setS({error:`Video nặng ${MB.toFixed(0)}MB — quá lớn. Hãy dùng video reel ngắn dưới ~80MB.`}); return; }
 
-  setS({loading:true,error:"",result:null,status:"Đang tải video lên... 0%"});
+  setS({loading:true,error:"",result:null,status:"Đang tải video lên... 0%",uploadedUri:null,uploadedMime:null});
   try{
     // 1) Upload video (có %)
     const upInfo = await uploadWithProgress(state.videoFile, (pct)=>{
       setS({status:`Đang tải video lên... ${pct}%`});
     });
-    if(upInfo.error || !upInfo.name){ throw new Error(upInfo.error||"Tải file thất bại"); }
+    // FIX: hiện cả detail để thấy lý do thật từ Gemini (vd: key sai, quota)
+    if(upInfo.error || !upInfo.name){ throw new Error(errMsg(upInfo,"Tải file thất bại")); }
 
     // 2) Chờ xử lý xong (ACTIVE) — ảnh thường xong ngay, video cần chờ
     let info = upInfo, tries = 0;
@@ -256,28 +282,31 @@ async function run(){
           body:JSON.stringify({action:"status",name:upInfo.name})});
         info = await r.json();
         // FIX: nếu backend trả lỗi khi poll thì dừng ngay, đừng quay vô tận
-        if(info.error){ throw new Error(info.error); }
+        if(info.error){ throw new Error(errMsg(info,"Lỗi kiểm tra trạng thái")); }
         tries++;
       }
       if(info.state !== "ACTIVE"){ throw new Error("Xử lý quá lâu, thử file nhẹ hơn."); }
     }
 
+    // Lưu file đã upload để nút "Viết lại" dùng lại, KHÔNG cần upload lần nữa
+    state.uploadedUri = info.uri;
+    state.uploadedMime = info.mimeType;
+
     // 3) Phân tích & viết content
     setS({status:"Chuyên gia AI đang viết content..."});
-    let lengthSpec = state.length;
-    if(state.length === "Tự điền"){
-      const n = parseInt(state.customWords);
-      lengthSpec = (n && n>0) ? `khoảng ${n} từ` : "Vừa";
-    }
-    // Tông giọng / mục tiêu: nếu chọn tự điền thì dùng text người dùng nhập
-    const toneSpec = state.tone === "__custom__" ? (state.customTone.trim() || "tự nhiên") : state.tone;
-    const goalSpec = state.goal === "__custom__" ? (state.customGoal.trim() || "tăng tương tác") : state.goal;
-    const r = await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({action:"analyze",fileUri:info.uri,mimeType:info.mimeType,desc:state.desc,tone:toneSpec,goal:goalSpec,formula:state.formula,length:lengthSpec,mode:state.mode})});
-    const out = await r.json();
-    if(out.error){ throw new Error(out.error); }
-    const parsed = safeParse(out.raw);
-    if(!parsed){ throw new Error("AI trả dữ liệu chưa đầy đủ, hãy thử lại hoặc dùng video ngắn hơn."); }
+    const parsed = await callAnalyze(info.uri, info.mimeType);
+    setS({loading:false,status:"",result:parsed});
+  }catch(e){
+    setS({loading:false,status:"",error:"Lỗi: "+e.message});
+  }
+}
+
+// VIẾT LẠI: dùng lại file đã upload, gọi analyze lần nữa để AI ra content khác
+async function regenerate(){
+  if(!state.uploadedUri){ setS({error:"Chưa có file để viết lại. Hãy phân tích trước."}); return; }
+  setS({loading:true,error:"",result:null,status:"AI đang viết lại nội dung khác..."});
+  try{
+    const parsed = await callAnalyze(state.uploadedUri, state.uploadedMime);
     setS({loading:false,status:"",result:parsed});
   }catch(e){
     setS({loading:false,status:"",error:"Lỗi: "+e.message});
@@ -362,7 +391,10 @@ function render(){
         </div>
       </div>
       <div class="glass right">
-        <div class="label">✨ CONTENT REEL ĐỀ XUẤT</div>
+        <div class="label" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+          <span>✨ CONTENT REEL ĐỀ XUẤT</span>
+          ${(s.result && !s.loading) ? `<button class="copy" style="margin-top:0" onclick="regenerate()">🔄 Viết lại</button>` : ``}
+        </div>
         ${resHtml}
       </div>
     </div>
