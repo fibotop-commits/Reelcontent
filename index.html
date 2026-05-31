@@ -86,7 +86,7 @@
   .btn { width: 100%; margin-top: 20px; padding: 16px; border-radius: 18px; border: none; cursor: pointer; background: #3a4a6b; color: #fff; font-size: 16px; font-weight: 700; }
   .btn:active { transform: scale(.985); }
   .btn:disabled { opacity: .6; cursor: default; }
-  .err { margin-top: 12px; color: #c0392b; font-size: 13px; text-align: center; }
+  .err { margin-top: 12px; color: #c0392b; font-size: 13px; text-align: left; word-break: break-word; white-space: pre-wrap; background: rgba(192,57,43,.07); padding: 10px 12px; border-radius: 10px; }
   .res-block { margin-bottom: 18px; }
   .res-label { font-size: 11px; letter-spacing: 1.5px; color: #7a8a7a; font-weight: 700; margin-bottom: 8px; }
   .item { background: rgba(255,255,255,.6); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; font-size: 14px; color: #2a3650; line-height: 1.5; display:flex; gap:8px; align-items:flex-start; }
@@ -229,9 +229,9 @@ async function run(){
   try{
     // 1) Upload video (có %)
     const upInfo = await uploadWithProgress(state.videoFile, (pct)=>{
-      setS({status:`Đang tải video lên... ${pct}%`});
+      setS({status:`Đang tải lên... ${pct}%`});
     });
-    if(upInfo.error || !upInfo.name){ throw new Error(upInfo.error||"Tải file thất bại"); }
+    if(upInfo.error || !upInfo.name){ throw new Error((upInfo.error||"Tải lên thất bại") + (upInfo.detail ? " | CHI TIẾT: " + upInfo.detail : "")); }
 
     // 2) Chờ xử lý xong (ACTIVE) — ảnh thường xong ngay, video cần chờ
     let info = upInfo, tries = 0;
