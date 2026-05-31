@@ -181,6 +181,34 @@ function setS(p){
   render();
 }
 
+// FIX UX: cập nhật lựa chọn (chip tông/công thức/độ dài/mục tiêu) MÀ KHÔNG vẽ lại
+// toàn trang — giữ nguyên focus & nội dung textarea mô tả đang gõ dở.
+// Chỉ vẽ lại toàn trang khi việc đổi lựa chọn làm xuất hiện/ẩn ô input phụ
+// (vd: chọn "Tự điền" tông/mục tiêu/độ dài) vì lúc đó cấu trúc DOM thay đổi.
+function selectChip(field, value){
+  const prev = state[field];
+  state[field] = value;
+
+  // Các trạng thái cần đổi cấu trúc DOM -> buộc render lại
+  const needsStructuralRender =
+    field === "tone"   && (value === "__custom__" || prev === "__custom__") ||
+    field === "goal"   && (value === "__custom__" || prev === "__custom__") ||
+    field === "length" && (value === "Tự điền"    || prev === "Tự điền")   ||
+    field === "formula"; // formula đổi -> hộp mô tả/ví dụ đổi nội dung
+
+  if(needsStructuralRender){ render(); return; }
+
+  // Ngược lại: chỉ cập nhật class .on cho đúng nhóm chip (không đụng textarea)
+  refreshChipGroup(field);
+}
+
+// Cập nhật class .on cho 1 nhóm chip theo data-field, giữ DOM còn lại nguyên vẹn
+function refreshChipGroup(field){
+  document.querySelectorAll(`.chip[data-field="${field}"]`).forEach(btn=>{
+    btn.classList.toggle("on", btn.getAttribute("data-value") === String(state[field]));
+  });
+}
+
 // Upload binary tới Worker, có theo dõi % tiến trình (XHR hỗ trợ, fetch thì không)
 function uploadWithProgress(file, onProgress){
   return new Promise((resolve, reject)=>{
@@ -201,6 +229,9 @@ function uploadWithProgress(file, onProgress){
 async function run(){
   if(!state.videoFile){ setS({error:"Vui lòng tải video lên trước."}); return; }
   if(WORKER_URL.includes("YOUR-WORKER")){ setS({error:"Bạn chưa dán URL Worker vào file (biến WORKER_URL)."}); return; }
+
+  // FIX: chặn file rỗng (0 byte) — backend cũng từ chối nhưng chặn sớm cho rõ ràng
+  if(state.videoFile.size === 0){ setS({error:"File rỗng (0 byte). Hãy chọn file khác."}); return; }
 
   // Cảnh báo sớm nếu video quá nặng (chặn trước khi tải, đỡ chờ vô ích)
   const MB = state.videoFile.size / (1024*1024);
@@ -224,6 +255,8 @@ async function run(){
         const r = await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},
           body:JSON.stringify({action:"status",name:upInfo.name})});
         info = await r.json();
+        // FIX: nếu backend trả lỗi khi poll thì dừng ngay, đừng quay vô tận
+        if(info.error){ throw new Error(info.error); }
         tries++;
       }
       if(info.state !== "ACTIVE"){ throw new Error("Xử lý quá lâu, thử file nhẹ hơn."); }
@@ -278,6 +311,9 @@ function render(){
     : s.result ? renderResult(s.result)
     : `<div class="empty">🎬 Tải video và nhấn phân tích để nhận content do chuyên gia AI viết.</div>`;
 
+  const toneList = s.mode==="personal"?tonesPersonal:tones;
+  const goalList = s.mode==="personal"?goalsPersonal:goals;
+
   document.getElementById("app").innerHTML = `
   <div class="wrap">
     <div class="glass header">
@@ -307,19 +343,19 @@ function render(){
           <div class="label">MÔ TẢ VIDEO (tuỳ chọn)</div>
           <textarea id="desc" placeholder="VD: Quá trình trang trí bánh kem dâu 2 tầng cho sinh nhật bé gái..." oninput="state.desc=this.value">${s.desc}</textarea>
           <div class="mini">TÔNG GIỌNG</div>
-          <div class="chips">${(s.mode==="personal"?tonesPersonal:tones).map(t=>`<button class="chip ${s.tone===t?'on':''}" onclick="setS({tone:'${t}'})">${t}</button>`).join("")}<button class="chip ${s.tone==='__custom__'?'on':''}" onclick="setS({tone:'__custom__'})">✏️ Tự điền</button></div>
+          <div class="chips">${toneList.map(t=>`<button class="chip ${s.tone===t?'on':''}" data-field="tone" data-value="${t}" onclick="selectChip('tone','${t}')">${t}</button>`).join("")}<button class="chip ${s.tone==='__custom__'?'on':''}" data-field="tone" data-value="__custom__" onclick="selectChip('tone','__custom__')">✏️ Tự điền</button></div>
           ${s.tone==='__custom__'?`<input type="text" placeholder="Nhập tông giọng theo ý bạn, vd: nhẹ nhàng tâm tình..." value="${s.customTone}" oninput="state.customTone=this.value" class="custom-in">`:``}
           ${s.mode==="personal" ? "" : `
           <div class="mini">CÔNG THỨC VIẾT</div>
-          <div class="chips">${formulas.map(f=>`<button class="chip ${s.formula===f.id?'on':''}" onclick="setS({formula:'${f.id}'})">${f.id}</button>`).join("")}</div>
+          <div class="chips">${formulas.map(f=>`<button class="chip ${s.formula===f.id?'on':''}" data-field="formula" data-value="${f.id}" onclick="selectChip('formula','${f.id}')">${f.id}</button>`).join("")}</div>
           ${(()=>{ const f=formulas.find(x=>x.id===s.formula); return `<div class="formula-box"><div class="formula-desc">${f.desc}</div><div class="formula-ex"><b>Ví dụ:</b> ${f.example}</div></div>`; })()}`}
           <div class="mini">ĐỘ DÀI CONTENT</div>
-          <div class="chips">${lengths.map(l=>`<button class="chip ${s.length===l.id?'on':''}" onclick="setS({length:'${l.id}'})">${l.id}</button>`).join("")}</div>
+          <div class="chips">${lengths.map(l=>`<button class="chip ${s.length===l.id?'on':''}" data-field="length" data-value="${l.id}" onclick="selectChip('length','${l.id}')">${l.id}</button>`).join("")}</div>
           ${s.length==="Tự điền"
             ? `<input id="cw" type="number" min="10" max="1000" placeholder="Nhập số từ, vd: 100" value="${s.customWords}" oninput="state.customWords=this.value" style="width:100%;margin-top:10px;border-radius:14px;border:1px solid rgba(58,74,107,.15);padding:12px 14px;font-size:16px;background:rgba(255,255,255,.6);color:#2a3650">`
             : `<div class="length-hint">${lengths.find(l=>l.id===s.length).hint}</div>`}
           <div class="mini">MỤC TIÊU</div>
-          <div class="chips">${(s.mode==="personal"?goalsPersonal:goals).map(g=>`<button class="chip ${s.goal===g?'on':''}" onclick="setS({goal:'${g}'})">${g}</button>`).join("")}<button class="chip ${s.goal==='__custom__'?'on':''}" onclick="setS({goal:'__custom__'})">✏️ Tự điền</button></div>
+          <div class="chips">${goalList.map(g=>`<button class="chip ${s.goal===g?'on':''}" data-field="goal" data-value="${g}" onclick="selectChip('goal','${g}')">${g}</button>`).join("")}<button class="chip ${s.goal==='__custom__'?'on':''}" data-field="goal" data-value="__custom__" onclick="selectChip('goal','__custom__')">✏️ Tự điền</button></div>
           ${s.goal==='__custom__'?`<input type="text" placeholder="Nhập mục tiêu theo ý bạn, vd: kêu gọi đăng ký lớp học..." value="${s.customGoal}" oninput="state.customGoal=this.value" class="custom-in">`:``}
           <button class="btn" ${s.loading?'disabled':''} onclick="run()">${s.loading?'⏳ Đang xử lý...':'✨ Phân tích & Viết content'}</button>
           ${s.error?`<div class="err">${s.error}</div>`:''}
@@ -334,7 +370,13 @@ function render(){
 }
 
 function renderResult(r){
-  const esc = (x)=>String(x).replace(/`/g,"'").replace(/'/g,"\\'");
+  // FIX: escape đúng thứ tự — backslash TRƯỚC, rồi backtick, nháy đơn, và newline.
+  // Nếu không escape newline, caption nhiều dòng sẽ phá vỡ chuỗi trong onclick="copy('...')".
+  const esc = (x)=>String(x)
+    .replace(/\\/g,"\\\\")
+    .replace(/`/g,"'")
+    .replace(/'/g,"\\'")
+    .replace(/\r?\n/g,"\\n");
   return `
     <div class="res-block"><div class="res-label">PHÂN TÍCH VIDEO</div><div style="font-size:14px;color:#2a3650;line-height:1.6">${r.analysis||""}</div></div>
     <div class="res-block"><div class="res-label">HOOK MỞ ĐẦU</div>
