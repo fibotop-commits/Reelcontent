@@ -5,12 +5,45 @@
 ============================================================ -->
 <div id="app"></div>
 <script>
-  // Đảm bảo có viewport cho iPhone (nếu file chạy độc lập)
-  if(!document.querySelector('meta[name=viewport]')){
-    const m=document.createElement('meta'); m.name='viewport';
-    m.content='width=device-width, initial-scale=1, viewport-fit=cover';
-    document.head.appendChild(m);
-  }
+  // ===== Cấu hình để "Thêm vào màn hình chính" thành app (PWA) =====
+  (function(){
+    const head = document.head;
+    const add = (tag, attrs) => { const e=document.createElement(tag); Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v)); head.appendChild(e); return e; };
+
+    if(!document.querySelector('meta[name=viewport]'))
+      add('meta',{name:'viewport',content:'width=device-width, initial-scale=1, viewport-fit=cover'});
+
+    // Tên app + thanh trạng thái
+    add('meta',{name:'apple-mobile-web-app-capable',content:'yes'});
+    add('meta',{name:'mobile-web-app-capable',content:'yes'});
+    add('meta',{name:'apple-mobile-web-app-status-bar-style',content:'default'});
+    add('meta',{name:'apple-mobile-web-app-title',content:'Reel AI'});
+    add('meta',{name:'theme-color',content:'#3a4a6b'});
+    document.title = 'Reel Studio AI — Toulouse';
+
+    // Icon app: vẽ bằng SVG (navy gradient, chữ T thương hiệu) -> dùng làm icon màn hình chính
+    const iconSVG = `<svg xmlns='http://www.w3.org/2000/svg' width='512' height='512' viewBox='0 0 512 512'>
+      <defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>
+        <stop offset='0' stop-color='#46577d'/><stop offset='1' stop-color='#2a3650'/></linearGradient></defs>
+      <rect width='512' height='512' rx='112' fill='url(#g)'/>
+      <circle cx='256' cy='256' r='150' fill='none' stroke='#ffffff' stroke-width='20' opacity='0.95'/>
+      <text x='256' y='258' font-family='Georgia, serif' font-size='180' font-weight='700' fill='#ffffff' text-anchor='middle' dominant-baseline='central'>T</text>
+      <circle cx='256' cy='400' r='14' fill='#9fb6e0'/>
+    </svg>`;
+    const iconURL = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(iconSVG)));
+    add('link',{rel:'apple-touch-icon',href:iconURL});
+    add('link',{rel:'icon',type:'image/svg+xml',href:iconURL});
+
+    // Manifest (cho Android/Chrome hiện nút "Cài đặt ứng dụng")
+    const manifest = {
+      name:'Reel Studio AI — Toulouse', short_name:'Reel AI',
+      start_url:'.', display:'standalone',
+      background_color:'#e8efe6', theme_color:'#3a4a6b',
+      icons:[{src:iconURL,sizes:'512x512',type:'image/svg+xml',purpose:'any maskable'}]
+    };
+    const mURL = 'data:application/json;base64,' + btoa(unescape(encodeURIComponent(JSON.stringify(manifest))));
+    add('link',{rel:'manifest',href:mURL});
+  })();
 </script>
 
 <style>
@@ -35,6 +68,10 @@
   video { width: 100%; border-radius: 18px; display: block; background:#000; }
   textarea { width: 100%; min-height: 80px; border-radius: 16px; border: 1px solid rgba(58,74,107,.15); padding: 14px; font-size: 16px; resize: vertical; background: rgba(255,255,255,.6); color: #2a3650; }
   .mini { font-size: 11px; font-weight: 700; color: #7a8a7a; margin: 16px 0 8px; }
+  .formula-box { background: rgba(58,74,107,.06); border-left: 3px solid #3a4a6b; border-radius: 10px; padding: 12px 14px; margin-top: 10px; }
+  .formula-desc { font-size: 13px; color: #2a3650; line-height: 1.55; }
+  .formula-ex { font-size: 12.5px; color: #4a5a72; line-height: 1.55; margin-top: 8px; font-style: italic; }
+  .formula-ex b { font-style: normal; color: #3a7a4a; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip { padding: 9px 14px; border-radius: 16px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; background: rgba(255,255,255,.6); color: #5a6a5a; }
   .chip.on { background: #3a4a6b; color: #fff; }
@@ -74,12 +111,42 @@
 <script>
 // ============================================================
 //  ⬇️⬇️⬇️  DÁN URL WORKER CỦA BẠN VÀO ĐÂY  ⬇️⬇️⬇️
-const WORKER_URL = "https://toulousereel.hongphi130894.workers.dev/";
+const WORKER_URL = "https://toulousereel.hongphi130894.workers.dev";
 // ============================================================
 
 const tones = ["Cảm xúc / Storytelling","Trẻ trung / Hài hước","Sang trọng / Tinh tế","Bán hàng trực tiếp","Truyền cảm hứng"];
 const goals = ["Tăng tương tác & comment","Chốt đơn / Bán hàng","Tăng nhận diện thương hiệu","Kêu gọi đặt bánh"];
-let state = { tone: tones[0], goal: goals[0], videoFile: null, videoUrl: null, desc: "", loading: false, status:"", result: null, error: "" };
+
+// Các công thức copywriting + giải thích + ví dụ cụ thể cho bánh sinh nhật Toulouse
+const formulas = [
+  {
+    id: "AI tự chọn",
+    desc: "Để AI tự cân nhắc và chọn công thức phù hợp nhất với nội dung video.",
+    example: "AI sẽ phân tích video rồi quyết định cách viết hợp nhất."
+  },
+  {
+    id: "AIDA",
+    desc: "Attention (gây chú ý) → Interest (khơi gợi quan tâm) → Desire (tạo khao khát) → Action (kêu gọi đặt hàng). Kinh điển, hợp bán hàng trực tiếp.",
+    example: "A: Chiếc bánh khiến cả bữa tiệc ồ lên 😍 → I: Kem tươi Pháp, dâu tươi mỗi sáng → D: Sinh nhật con xứng đáng điều đẹp nhất → A: Inbox đặt bánh ngay hôm nay!"
+  },
+  {
+    id: "PAS",
+    desc: "Problem (nêu vấn đề) → Agitate (khoét sâu nỗi lo) → Solution (giải pháp là bạn). Rất mạnh cho reel vì hook đánh thẳng nỗi đau khách.",
+    example: "P: Đặt bánh mà sợ bánh xấu, giao trễ? → A: Sinh nhật chỉ có một lần, hỏng là tiếc cả năm → S: Toulouse handmade, giao đúng giờ, đẹp như hình."
+  },
+  {
+    id: "BAB",
+    desc: "Before (hiện tại) → After (viễn cảnh đẹp) → Bridge (cầu nối là sản phẩm). Hợp kể chuyện cảm xúc, chạm tới khoảnh khắc.",
+    example: "B: Tiệc sinh nhật thiếu điểm nhấn → A: Khoảnh khắc thổi nến ai cũng trầm trồ → Bridge: Nhờ chiếc bánh Toulouse đặt riêng."
+  },
+  {
+    id: "4U",
+    desc: "Useful (hữu ích) · Urgent (khẩn cấp) · Unique (độc đáo) · Ultra-specific (cực cụ thể). Hợp viết hook ngắn cho 3 giây đầu reel.",
+    example: "Bánh kem dâu tươi 2 tầng, đặt trước 24h, chỉ 30 suất/ngày tại Ô Chợ Dừa 🍓"
+  }
+];
+
+let state = { tone: tones[0], goal: goals[0], formula: formulas[0].id, videoFile: null, videoUrl: null, desc: "", loading: false, status:"", result: null, error: "" };
 
 function setS(p){ Object.assign(state,p); render(); }
 
@@ -115,7 +182,7 @@ async function run(){
     // 3) phân tích
     setS({status:"Chuyên gia AI đang viết content..."});
     r = await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({action:"analyze",fileUri:info.uri,mimeType:info.mimeType,desc:state.desc,tone:state.tone,goal:state.goal})});
+      body:JSON.stringify({action:"analyze",fileUri:info.uri,mimeType:info.mimeType,desc:state.desc,tone:state.tone,goal:state.goal,formula:state.formula})});
     let out = await r.json();
     if(out.error){ throw new Error(out.error); }
     const parsed = safeParse(out.raw);
@@ -176,6 +243,9 @@ function render(){
           <textarea id="desc" placeholder="VD: Quá trình trang trí bánh kem dâu 2 tầng cho sinh nhật bé gái..." oninput="state.desc=this.value">${s.desc}</textarea>
           <div class="mini">TÔNG GIỌNG</div>
           <div class="chips">${tones.map(t=>`<button class="chip ${s.tone===t?'on':''}" onclick="setS({tone:'${t}'})">${t}</button>`).join("")}</div>
+          <div class="mini">CÔNG THỨC VIẾT</div>
+          <div class="chips">${formulas.map(f=>`<button class="chip ${s.formula===f.id?'on':''}" onclick="setS({formula:'${f.id}'})">${f.id}</button>`).join("")}</div>
+          ${(()=>{ const f=formulas.find(x=>x.id===s.formula); return `<div class="formula-box"><div class="formula-desc">${f.desc}</div><div class="formula-ex"><b>Ví dụ:</b> ${f.example}</div></div>`; })()}
           <div class="mini">MỤC TIÊU</div>
           <div class="chips">${goals.map(g=>`<button class="chip ${s.goal===g?'on':''}" onclick="setS({goal:'${g}'})">${g}</button>`).join("")}</div>
           <button class="btn" ${s.loading?'disabled':''} onclick="run()">${s.loading?'⏳ Đang xử lý...':'✨ Phân tích & Viết content'}</button>
