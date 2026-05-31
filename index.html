@@ -76,6 +76,7 @@
   .formula-ex { font-size: 12.5px; color: #4a5a72; line-height: 1.55; margin-top: 8px; font-style: italic; }
   .formula-ex b { font-style: normal; color: #3a7a4a; }
   .length-hint { font-size: 12.5px; color: #7a8a7a; margin-top: 8px; font-style: italic; }
+  .custom-in { width: 100%; margin-top: 10px; border-radius: 14px; border: 1px solid rgba(58,74,107,.2); padding: 12px 14px; font-size: 16px; background: rgba(255,255,255,.7); color: #2a3650; box-sizing: border-box; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip { padding: 9px 14px; border-radius: 16px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; background: rgba(255,255,255,.6); color: #5a6a5a; }
   .chip.on { background: #3a4a6b; color: #fff; }
@@ -166,7 +167,7 @@ const lengths = [
   { id: "Tự điền", hint: "Bạn nhập số từ mong muốn" }
 ];
 
-let state = { mode: "toulouse", tone: tones[0], goal: goals[0], formula: formulas[0].id, length: lengths[0].id, customWords: "", videoFile: null, videoUrl: null, isImage: false, desc: "", loading: false, status:"", result: null, error: "" };
+let state = { mode: "toulouse", tone: tones[0], goal: goals[0], customTone: "", customGoal: "", formula: formulas[0].id, length: lengths[0].id, customWords: "", videoFile: null, videoUrl: null, isImage: false, desc: "", loading: false, status:"", result: null, error: "" };
 
 function setS(p){
   // Tối ưu mượt: nếu chỉ đổi mỗi status lúc đang tải, cập nhật riêng chữ đó
@@ -235,8 +236,11 @@ async function run(){
       const n = parseInt(state.customWords);
       lengthSpec = (n && n>0) ? `khoảng ${n} từ` : "Vừa";
     }
+    // Tông giọng / mục tiêu: nếu chọn tự điền thì dùng text người dùng nhập
+    const toneSpec = state.tone === "__custom__" ? (state.customTone.trim() || "tự nhiên") : state.tone;
+    const goalSpec = state.goal === "__custom__" ? (state.customGoal.trim() || "tăng tương tác") : state.goal;
     const r = await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({action:"analyze",fileUri:info.uri,mimeType:info.mimeType,desc:state.desc,tone:state.tone,goal:state.goal,formula:state.formula,length:lengthSpec,mode:state.mode})});
+      body:JSON.stringify({action:"analyze",fileUri:info.uri,mimeType:info.mimeType,desc:state.desc,tone:toneSpec,goal:goalSpec,formula:state.formula,length:lengthSpec,mode:state.mode})});
     const out = await r.json();
     if(out.error){ throw new Error(out.error); }
     const parsed = safeParse(out.raw);
@@ -303,7 +307,8 @@ function render(){
           <div class="label">MÔ TẢ VIDEO (tuỳ chọn)</div>
           <textarea id="desc" placeholder="VD: Quá trình trang trí bánh kem dâu 2 tầng cho sinh nhật bé gái..." oninput="state.desc=this.value">${s.desc}</textarea>
           <div class="mini">TÔNG GIỌNG</div>
-          <div class="chips">${(s.mode==="personal"?tonesPersonal:tones).map(t=>`<button class="chip ${s.tone===t?'on':''}" onclick="setS({tone:'${t}'})">${t}</button>`).join("")}</div>
+          <div class="chips">${(s.mode==="personal"?tonesPersonal:tones).map(t=>`<button class="chip ${s.tone===t?'on':''}" onclick="setS({tone:'${t}'})">${t}</button>`).join("")}<button class="chip ${s.tone==='__custom__'?'on':''}" onclick="setS({tone:'__custom__'})">✏️ Tự điền</button></div>
+          ${s.tone==='__custom__'?`<input type="text" placeholder="Nhập tông giọng theo ý bạn, vd: nhẹ nhàng tâm tình..." value="${s.customTone}" oninput="state.customTone=this.value" class="custom-in">`:``}
           ${s.mode==="personal" ? "" : `
           <div class="mini">CÔNG THỨC VIẾT</div>
           <div class="chips">${formulas.map(f=>`<button class="chip ${s.formula===f.id?'on':''}" onclick="setS({formula:'${f.id}'})">${f.id}</button>`).join("")}</div>
@@ -314,7 +319,8 @@ function render(){
             ? `<input id="cw" type="number" min="10" max="1000" placeholder="Nhập số từ, vd: 100" value="${s.customWords}" oninput="state.customWords=this.value" style="width:100%;margin-top:10px;border-radius:14px;border:1px solid rgba(58,74,107,.15);padding:12px 14px;font-size:16px;background:rgba(255,255,255,.6);color:#2a3650">`
             : `<div class="length-hint">${lengths.find(l=>l.id===s.length).hint}</div>`}
           <div class="mini">MỤC TIÊU</div>
-          <div class="chips">${(s.mode==="personal"?goalsPersonal:goals).map(g=>`<button class="chip ${s.goal===g?'on':''}" onclick="setS({goal:'${g}'})">${g}</button>`).join("")}</div>
+          <div class="chips">${(s.mode==="personal"?goalsPersonal:goals).map(g=>`<button class="chip ${s.goal===g?'on':''}" onclick="setS({goal:'${g}'})">${g}</button>`).join("")}<button class="chip ${s.goal==='__custom__'?'on':''}" onclick="setS({goal:'__custom__'})">✏️ Tự điền</button></div>
+          ${s.goal==='__custom__'?`<input type="text" placeholder="Nhập mục tiêu theo ý bạn, vd: kêu gọi đăng ký lớp học..." value="${s.customGoal}" oninput="state.customGoal=this.value" class="custom-in">`:``}
           <button class="btn" ${s.loading?'disabled':''} onclick="run()">${s.loading?'⏳ Đang xử lý...':'✨ Phân tích & Viết content'}</button>
           ${s.error?`<div class="err">${s.error}</div>`:''}
         </div>
@@ -354,7 +360,7 @@ function onFile(e){
 function switchMode(m){
   const t = m === "personal" ? tonesPersonal[0] : tones[0];
   const g = m === "personal" ? goalsPersonal[0] : goals[0];
-  setS({ mode: m, tone: t, goal: g, videoFile: null, videoUrl: null, isImage: false, result: null, error: "" });
+  setS({ mode: m, tone: t, goal: g, customTone: "", customGoal: "", videoFile: null, videoUrl: null, isImage: false, result: null, error: "" });
 }
 
 render();
