@@ -77,16 +77,13 @@
   .formula-ex b { font-style: normal; color: #3a7a4a; }
   .length-hint { font-size: 12.5px; color: #7a8a7a; margin-top: 8px; font-style: italic; }
   .custom-in { width: 100%; margin-top: 10px; border-radius: 14px; border: 1px solid rgba(58,74,107,.2); padding: 12px 14px; font-size: 16px; background: rgba(255,255,255,.7); color: #2a3650; box-sizing: border-box; }
-  .regen-btn { flex-shrink: 0; padding: 9px 15px; border-radius: 14px; border: none; cursor: pointer; font-size: 13px; font-weight: 700; background: rgba(58,74,107,.1); color: #3a4a6b; transition: background .15s ease; }
-  .regen-btn:hover { background: rgba(58,74,107,.18); }
-  .regen-btn:active { transform: scale(.96); }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip { padding: 9px 14px; border-radius: 16px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; background: rgba(255,255,255,.6); color: #5a6a5a; }
   .chip.on { background: #3a4a6b; color: #fff; }
   .btn { width: 100%; margin-top: 20px; padding: 16px; border-radius: 18px; border: none; cursor: pointer; background: #3a4a6b; color: #fff; font-size: 16px; font-weight: 700; }
   .btn:active { transform: scale(.985); }
   .btn:disabled { opacity: .6; cursor: default; }
-  .err { margin-top: 12px; color: #c0392b; font-size: 13px; text-align: left; word-break: break-word; white-space: pre-wrap; background: rgba(192,57,43,.07); padding: 10px 12px; border-radius: 10px; }
+  .err { margin-top: 12px; color: #c0392b; font-size: 13px; text-align: center; }
   .res-block { margin-bottom: 18px; }
   .res-label { font-size: 11px; letter-spacing: 1.5px; color: #7a8a7a; font-weight: 700; margin-bottom: 8px; }
   .item { background: rgba(255,255,255,.6); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; font-size: 14px; color: #2a3650; line-height: 1.5; display:flex; gap:8px; align-items:flex-start; }
@@ -170,7 +167,7 @@ const lengths = [
   { id: "Tự điền", hint: "Bạn nhập số từ mong muốn" }
 ];
 
-let state = { mode: "toulouse", tone: tones[0], goal: goals[0], customTone: "", customGoal: "", formula: formulas[0].id, length: lengths[0].id, customWords: "", videoFile: null, videoUrl: null, isImage: false, desc: "", loading: false, status:"", result: null, error: "", lastFile: null };
+let state = { mode: "toulouse", tone: tones[0], goal: goals[0], customTone: "", customGoal: "", formula: formulas[0].id, length: lengths[0].id, customWords: "", videoFile: null, videoUrl: null, isImage: false, desc: "", loading: false, status:"", result: null, error: "" };
 
 function setS(p){
   // Tối ưu mượt: nếu chỉ đổi mỗi status lúc đang tải, cập nhật riêng chữ đó
@@ -184,36 +181,20 @@ function setS(p){
   render();
 }
 
-// Suy ra MIME type từ đuôi file khi trình duyệt (iPhone Safari) trả về rỗng/lạ
-function resolveMime(file){
-  let mt = file.type;
-  if(mt && mt !== "application/octet-stream") return mt;
-  const name = (file.name||"").toLowerCase();
-  const map = { mov:"video/quicktime", mp4:"video/mp4", m4v:"video/mp4", webm:"video/webm",
-                jpg:"image/jpeg", jpeg:"image/jpeg", png:"image/png", heic:"image/heic", heif:"image/heif", webp:"image/webp", gif:"image/gif" };
-  const ext = name.split(".").pop();
-  return map[ext] || (file.type || "application/octet-stream");
-}
-
 // Upload binary tới Worker, có theo dõi % tiến trình (XHR hỗ trợ, fetch thì không)
 function uploadWithProgress(file, onProgress){
   return new Promise((resolve, reject)=>{
-    const mime = resolveMime(file);
     const xhr = new XMLHttpRequest();
     xhr.open("POST", WORKER_URL + "?action=upload");
     xhr.setRequestHeader("Content-Type","application/octet-stream");
-    xhr.setRequestHeader("X-Mime-Type", mime);
-    xhr.setRequestHeader("X-Size-Bytes", String(file.size || 0));
+    xhr.setRequestHeader("X-Mime-Type", file.type || "video/mp4");
+    xhr.setRequestHeader("X-Size-Bytes", String(file.size));
     xhr.upload.onprogress = (e)=>{ if(e.lengthComputable) onProgress(Math.round(e.loaded/e.total*100)); };
     xhr.onload = ()=>{ try{ resolve(JSON.parse(xhr.responseText)); }catch{ reject(new Error("Phản hồi không hợp lệ")); } };
-    xhr.onerror = ()=> reject(new Error("Mất kết nối khi tải lên"));
-    xhr.ontimeout = ()=> reject(new Error("Tải lên quá lâu, thử file nhẹ hơn"));
+    xhr.onerror = ()=> reject(new Error("Mất kết nối khi tải video"));
+    xhr.ontimeout = ()=> reject(new Error("Tải video quá lâu, thử video nhẹ hơn"));
     xhr.timeout = 180000; // 3 phút
-    // Đọc thành blob để lấy kích thước thật, rồi gửi (chạy đồng nhất trên iPhone Safari)
-    file.arrayBuffer().then(buf=>{
-      xhr.setRequestHeader("X-Size-Bytes", String(buf.byteLength));
-      xhr.send(buf);
-    }).catch(()=> xhr.send(file));
+    xhr.send(file);
   });
 }
 
@@ -229,9 +210,9 @@ async function run(){
   try{
     // 1) Upload video (có %)
     const upInfo = await uploadWithProgress(state.videoFile, (pct)=>{
-      setS({status:`Đang tải lên... ${pct}%`});
+      setS({status:`Đang tải video lên... ${pct}%`});
     });
-    if(upInfo.error || !upInfo.name){ throw new Error((upInfo.error||"Tải lên thất bại") + (upInfo.detail ? " | CHI TIẾT: " + upInfo.detail : "")); }
+    if(upInfo.error || !upInfo.name){ throw new Error(upInfo.error||"Tải file thất bại"); }
 
     // 2) Chờ xử lý xong (ACTIVE) — ảnh thường xong ngay, video cần chờ
     let info = upInfo, tries = 0;
@@ -248,34 +229,22 @@ async function run(){
       if(info.state !== "ACTIVE"){ throw new Error("Xử lý quá lâu, thử file nhẹ hơn."); }
     }
 
-    // Lưu thông tin file để có thể "Viết lại" mà không cần tải lên lần nữa
-    state.lastFile = { uri: info.uri, mimeType: info.mimeType };
-
     // 3) Phân tích & viết content
-    await analyzeContent();
-  }catch(e){
-    setS({loading:false,status:"",error:"Lỗi: "+e.message});
-  }
-}
-
-// Gọi AI viết content (dùng cho cả lần đầu và "Viết lại")
-async function analyzeContent(regenerate){
-  if(!state.lastFile){ setS({error:"Chưa có file để phân tích."}); return; }
-  setS({loading:true,error:"", status: regenerate ? "Đang viết lại nội dung khác..." : "Chuyên gia AI đang viết content..."});
-  try{
+    setS({status:"Chuyên gia AI đang viết content..."});
     let lengthSpec = state.length;
     if(state.length === "Tự điền"){
       const n = parseInt(state.customWords);
       lengthSpec = (n && n>0) ? `khoảng ${n} từ` : "Vừa";
     }
+    // Tông giọng / mục tiêu: nếu chọn tự điền thì dùng text người dùng nhập
     const toneSpec = state.tone === "__custom__" ? (state.customTone.trim() || "tự nhiên") : state.tone;
     const goalSpec = state.goal === "__custom__" ? (state.customGoal.trim() || "tăng tương tác") : state.goal;
     const r = await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({action:"analyze",fileUri:state.lastFile.uri,mimeType:state.lastFile.mimeType,desc:state.desc,tone:toneSpec,goal:goalSpec,formula:state.formula,length:lengthSpec,mode:state.mode,regenerate:!!regenerate})});
+      body:JSON.stringify({action:"analyze",fileUri:info.uri,mimeType:info.mimeType,desc:state.desc,tone:toneSpec,goal:goalSpec,formula:state.formula,length:lengthSpec,mode:state.mode})});
     const out = await r.json();
     if(out.error){ throw new Error(out.error); }
     const parsed = safeParse(out.raw);
-    if(!parsed){ throw new Error("AI trả dữ liệu chưa đầy đủ, hãy thử lại."); }
+    if(!parsed){ throw new Error("AI trả dữ liệu chưa đầy đủ, hãy thử lại hoặc dùng video ngắn hơn."); }
     setS({loading:false,status:"",result:parsed});
   }catch(e){
     setS({loading:false,status:"",error:"Lỗi: "+e.message});
@@ -357,10 +326,7 @@ function render(){
         </div>
       </div>
       <div class="glass right">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px">
-          <div class="label" style="margin:0">✨ CONTENT ${s.mode==="personal"?"STATUS":"REEL"} ĐỀ XUẤT</div>
-          ${s.result && !s.loading ? `<button class="regen-btn" onclick="analyzeContent(true)">🔄 Viết lại</button>` : ``}
-        </div>
+        <div class="label">✨ CONTENT REEL ĐỀ XUẤT</div>
         ${resHtml}
       </div>
     </div>
