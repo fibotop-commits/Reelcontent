@@ -1,8 +1,3 @@
-<!-- ============================================================
-     TOULOUSE REEL AI — Giao diện web (KHÔNG chứa API key)
-     Gọi tới Cloudflare Worker đã deploy của bạn.
-     CHỈNH 1 DÒNG: dán URL Worker vào biến WORKER_URL bên dưới.
-============================================================ -->
 <div id="app"></div>
 <script>
   // ===== Cấu hình để "Thêm vào màn hình chính" thành app (PWA) =====
@@ -13,7 +8,6 @@
     if(!document.querySelector('meta[name=viewport]'))
       add('meta',{name:'viewport',content:'width=device-width, initial-scale=1, viewport-fit=cover'});
 
-    // Tên app + thanh trạng thái
     add('meta',{name:'apple-mobile-web-app-capable',content:'yes'});
     add('meta',{name:'mobile-web-app-capable',content:'yes'});
     add('meta',{name:'apple-mobile-web-app-status-bar-style',content:'default'});
@@ -21,7 +15,6 @@
     add('meta',{name:'theme-color',content:'#3a4a6b'});
     document.title = 'Reel Studio AI — Toulouse';
 
-    // Icon app: vẽ bằng SVG (navy gradient, chữ T thương hiệu) -> dùng làm icon màn hình chính
     const iconSVG = `<svg xmlns='http://www.w3.org/2000/svg' width='512' height='512' viewBox='0 0 512 512'>
       <defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>
         <stop offset='0' stop-color='#46577d'/><stop offset='1' stop-color='#2a3650'/></linearGradient></defs>
@@ -34,7 +27,6 @@
     add('link',{rel:'apple-touch-icon',href:iconURL});
     add('link',{rel:'icon',type:'image/svg+xml',href:iconURL});
 
-    // Manifest (cho Android/Chrome hiện nút "Cài đặt ứng dụng")
     const manifest = {
       name:'Reel Studio AI — Toulouse', short_name:'Reel AI',
       start_url:'.', display:'standalone',
@@ -51,8 +43,7 @@
   html { -webkit-text-size-adjust: 100%; }
   body { background: linear-gradient(135deg,#d7e3d2 0%,#e8efe6 40%,#cfdbe0 100%); min-height: 100vh; min-height: 100dvh; }
   .wrap { max-width: 980px; margin: 0 auto; padding: 28px; }
-  .glass { background: rgba(255,255,255,.55); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-           border: 1px solid rgba(255,255,255,.6); box-shadow: 0 8px 32px rgba(60,80,60,.12); }
+  .glass { background: rgba(255,255,255,.55); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,.6); box-shadow: 0 8px 32px rgba(60,80,60,.12); }
   .header { border-radius: 28px; padding: 20px 28px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; gap:12px; }
   .logo { width: 46px; height: 46px; border-radius: 14px; background: #3a4a6b; display: flex; align-items: center; justify-content: center; color:#fff; font-weight:800; font-size:20px; flex-shrink:0; }
   .title { font-size: 22px; font-weight: 800; color: #2a3650; letter-spacing: -.5px; }
@@ -83,7 +74,7 @@
   .btn { width: 100%; margin-top: 20px; padding: 16px; border-radius: 18px; border: none; cursor: pointer; background: #3a4a6b; color: #fff; font-size: 16px; font-weight: 700; }
   .btn:active { transform: scale(.985); }
   .btn:disabled { opacity: .6; cursor: default; }
-  .err { margin-top: 12px; color: #c0392b; font-size: 13px; text-align: center; }
+  .err { margin-top: 12px; color: #c0392b; font-size: 13px; text-align: center; font-weight: 600; white-space: pre-wrap; word-break: break-word; background: rgba(192,57,43,0.08); padding: 10px; border-radius: 12px; }
   .res-block { margin-bottom: 18px; }
   .res-label { font-size: 11px; letter-spacing: 1.5px; color: #7a8a7a; font-weight: 700; margin-bottom: 8px; }
   .item { background: rgba(255,255,255,.6); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; font-size: 14px; color: #2a3650; line-height: 1.5; display:flex; gap:8px; align-items:flex-start; }
@@ -102,7 +93,6 @@
   .right { border-radius: 28px; padding: 24px; min-height: 420px; }
   .status { font-size:12px; color:#7a8a7a; margin-top:8px; word-break:break-all; }
 
-  /* ===== iPhone / màn hình nhỏ ===== */
   @media(max-width:760px){
     .wrap { padding: 14px; }
     .grid { grid-template-columns: 1fr; gap: 14px; }
@@ -127,37 +117,15 @@ const WORKER_URL = "https://toulousereel.hongphi130894.workers.dev";
 const tones = ["Cảm xúc / Storytelling","Trẻ trung / Hài hước","Sang trọng / Tinh tế","Bán hàng trực tiếp","Truyền cảm hứng"];
 const goals = ["Tăng tương tác & comment","Chốt đơn / Bán hàng","Tăng nhận diện thương hiệu","Kêu gọi đặt bánh"];
 
-// Bộ tùy chọn riêng cho chế độ CÁ NHÂN (viết status FB cá nhân)
 const tonesPersonal = ["Tâm trạng / Sâu lắng","Hài hước / Bắt trend","Chữa lành / Tích cực","Đời thường / Chân thật","Cà khịa / Deep nhẹ"];
 const goalsPersonal = ["Nhiều like & comment","Kể chuyện đời thường","Thả thính / Gây chú ý","Truyền cảm hứng","Khoe khoảnh khắc đẹp"];
 
-// Các công thức copywriting + giải thích + ví dụ cụ thể cho bánh sinh nhật Toulouse
 const formulas = [
-  {
-    id: "AI tự chọn",
-    desc: "Để AI tự cân nhắc và chọn công thức phù hợp nhất với nội dung video.",
-    example: "AI sẽ phân tích video rồi quyết định cách viết hợp nhất."
-  },
-  {
-    id: "AIDA",
-    desc: "Attention (gây chú ý) → Interest (khơi gợi quan tâm) → Desire (tạo khao khát) → Action (kêu gọi đặt hàng). Kinh điển, hợp bán hàng trực tiếp.",
-    example: "A: Chiếc bánh khiến cả bữa tiệc ồ lên 😍 → I: Kem tươi Pháp, dâu tươi mỗi sáng → D: Sinh nhật con xứng đáng điều đẹp nhất → A: Inbox đặt bánh ngay hôm nay!"
-  },
-  {
-    id: "PAS",
-    desc: "Problem (nêu vấn đề) → Agitate (khoét sâu nỗi lo) → Solution (giải pháp là bạn). Rất mạnh cho reel vì hook đánh thẳng nỗi đau khách.",
-    example: "P: Đặt bánh mà sợ bánh xấu, giao trễ? → A: Sinh nhật chỉ có một lần, hỏng là tiếc cả năm → S: Toulouse handmade, giao đúng giờ, đẹp như hình."
-  },
-  {
-    id: "BAB",
-    desc: "Before (hiện tại) → After (viễn cảnh đẹp) → Bridge (cầu nối là sản phẩm). Hợp kể chuyện cảm xúc, chạm tới khoảnh khắc.",
-    example: "B: Tiệc sinh nhật thiếu điểm nhấn → A: Khoảnh khắc thổi nến ai cũng trầm trồ → Bridge: Nhờ chiếc bánh Toulouse đặt riêng."
-  },
-  {
-    id: "4U",
-    desc: "Useful (hữu ích) · Urgent (khẩn cấp) · Unique (độc đáo) · Ultra-specific (cực cụ thể). Hợp viết hook ngắn cho 3 giây đầu reel.",
-    example: "Bánh kem dâu tươi 2 tầng, đặt trước 24h, chỉ 30 suất/ngày tại Ô Chợ Dừa 🍓"
-  }
+  { id: "AI tự chọn", desc: "Để AI tự cân nhắc và chọn công thức phù hợp nhất với nội dung video.", example: "AI sẽ phân tích video rồi quyết định cách viết hợp nhất." },
+  { id: "AIDA", desc: "Attention (gây chú ý) → Interest (khơi gợi quan tâm) → Desire (tạo khao khát) → Action (kêu gọi đặt hàng). Kinh điển, hợp bán hàng trực tiếp.", example: "A: Chiếc bánh khiến cả bữa tiệc ồ lên 😍 → I: Kem tươi Pháp, dâu tươi mỗi sáng → D: Sinh nhật con xứng đáng điều đẹp nhất → A: Inbox đặt bánh ngay hôm nay!" },
+  { id: "PAS", desc: "Problem (nêu vấn đề) → Agitate (khoét sâu nỗi lo) → Solution (giải pháp là bạn). Rất mạnh cho reel vì hook đánh thẳng nỗi đau khách.", example: "P: Đặt bánh mà sợ bánh xấu, giao trễ? → A: Sinh nhật chỉ có một lần, hỏng là tiếc cả năm → S: Toulouse handmade, giao đúng giờ, đẹp như hình." },
+  { id: "BAB", desc: "Before (hiện tại) → After (viễn cảnh đẹp) → Bridge (cầu nối là sản phẩm). Hợp kể chuyện cảm xúc, chạm tới khoảnh khắc.", example: "B: Tiệc sinh nhật thiếu điểm nhấn → A: Khoảnh khắc thổi nến ai cũng trầm trồ → Bridge: Nhờ chiếc bánh Toulouse đặt riêng." },
+  { id: "4U", desc: "Useful (hữu ích) · Urgent (khẩn cấp) · Unique (độc đáo) · Ultra-specific (cực cụ thể). Hợp viết hook ngắn cho 3 giây đầu reel.", example: "Bánh kem dâu tươi 2 tầng, đặt trước 24h, chỉ 30 suất/ngày tại Ô Chợ Dừa 🍓" }
 ];
 
 const lengths = [
@@ -170,8 +138,6 @@ const lengths = [
 let state = { mode: "toulouse", tone: tones[0], goal: goals[0], customTone: "", customGoal: "", formula: formulas[0].id, length: lengths[0].id, customWords: "", videoFile: null, videoUrl: null, isImage: false, desc: "", loading: false, status:"", result: null, error: "", uploadedUri: null, uploadedMime: null };
 
 function setS(p){
-  // Tối ưu mượt: nếu chỉ đổi mỗi status lúc đang tải, cập nhật riêng chữ đó
-  // thay vì vẽ lại toàn bộ trang (tránh giật + mất focus trên iPhone).
   const onlyStatus = Object.keys(p).length === 1 && "status" in p && state.loading;
   Object.assign(state,p);
   if(onlyStatus){
@@ -181,59 +147,56 @@ function setS(p){
   render();
 }
 
-// FIX UX: cập nhật lựa chọn (chip tông/công thức/độ dài/mục tiêu) MÀ KHÔNG vẽ lại
-// toàn trang — giữ nguyên focus & nội dung textarea mô tả đang gõ dở.
-// Chỉ vẽ lại toàn trang khi việc đổi lựa chọn làm xuất hiện/ẩn ô input phụ
-// (vd: chọn "Tự điền" tông/mục tiêu/độ dài) vì lúc đó cấu trúc DOM thay đổi.
 function selectChip(field, value){
   const prev = state[field];
   state[field] = value;
-
-  // Các trạng thái cần đổi cấu trúc DOM -> buộc render lại
   const needsStructuralRender =
     field === "tone"   && (value === "__custom__" || prev === "__custom__") ||
     field === "goal"   && (value === "__custom__" || prev === "__custom__") ||
     field === "length" && (value === "Tự điền"    || prev === "Tự điền")   ||
-    field === "formula"; // formula đổi -> hộp mô tả/ví dụ đổi nội dung
+    field === "formula";
 
   if(needsStructuralRender){ render(); return; }
-
-  // Ngược lại: chỉ cập nhật class .on cho đúng nhóm chip (không đụng textarea)
   refreshChipGroup(field);
 }
 
-// Cập nhật class .on cho 1 nhóm chip theo data-field, giữ DOM còn lại nguyên vẹn
 function refreshChipGroup(field){
   document.querySelectorAll(`.chip[data-field="${field}"]`).forEach(btn=>{
     btn.classList.toggle("on", btn.getAttribute("data-value") === String(state[field]));
   });
 }
 
-// Upload binary tới Worker, có theo dõi % tiến trình (XHR hỗ trợ, fetch thì không)
 function uploadWithProgress(file, onProgress){
   return new Promise((resolve, reject)=>{
     const xhr = new XMLHttpRequest();
     xhr.open("POST", WORKER_URL + "?action=upload");
     xhr.setRequestHeader("Content-Type","application/octet-stream");
-    xhr.setRequestHeader("X-Mime-Type", file.type && file.type.trim() !== "" ? file.type : "video/mp4");
+    
+    // FIX LỖI DI ĐỘNG: Nếu file.type bị rỗng, tự động map theo đuôi file hoặc ép về video/mp4 để tránh lỗi 400
+    let detectedMime = file.type;
+    if(!detectedMime || detectedMime.trim() === "") {
+      detectedMime = file.name.endsWith(".jpg") || file.name.endsWith(".jpeg") ? "image/jpeg" :
+                     file.name.endsWith(".png") ? "image/png" : "video/mp4";
+    }
+    
+    xhr.setRequestHeader("X-Mime-Type", detectedMime);
     xhr.setRequestHeader("X-Size-Bytes", String(file.size));
+    
     xhr.upload.onprogress = (e)=>{ if(e.lengthComputable) onProgress(Math.round(e.loaded/e.total*100)); };
-    xhr.onload = ()=>{ try{ resolve(JSON.parse(xhr.responseText)); }catch{ reject(new Error("Phản hồi không hợp lệ")); } };
-    xhr.onerror = ()=> reject(new Error("Mất kết nối khi tải video"));
-    xhr.ontimeout = ()=> reject(new Error("Tải video quá lâu, thử video nhẹ hơn"));
-    xhr.timeout = 180000; // 3 phút
+    xhr.onload = ()=>{ try{ resolve(JSON.parse(xhr.responseText)); }catch{ reject(new Error("Phản hồi không hợp lệ từ hệ thống")); } };
+    xhr.onerror = ()=> reject(new Error("Mất kết nối Internet khi tải dữ liệu"));
+    xhr.ontimeout = ()=> reject(new Error("Tải dữ liệu quá lâu, vui lòng chọn file nhẹ hơn"));
+    xhr.timeout = 180000;
     xhr.send(file);
   });
 }
 
-// Gộp lỗi từ backend: ưu tiên hiện cả detail để biết Gemini nói gì (key sai, quota...)
 function errMsg(o, fallback){
   if(!o) return fallback;
-  if(o.error && o.detail) return `${o.error} — ${o.detail}`;
+  if(o.error && o.detail) return `${o.error}\nChi tiết: ${o.detail}`;
   return o.error || fallback;
 }
 
-// Gọi action analyze với file đã upload sẵn — dùng chung cho lần đầu & "Viết lại"
 async function callAnalyze(uri, mime){
   let lengthSpec = state.length;
   if(state.length === "Tự điền"){
@@ -243,104 +206,86 @@ async function callAnalyze(uri, mime){
   const toneSpec = state.tone === "__custom__" ? (state.customTone.trim() || "tự nhiên") : state.tone;
   const goalSpec = state.goal === "__custom__" ? (state.customGoal.trim() || "tăng tương tác") : state.goal;
   
-  // ĐỒNG BỘ CHUẨN: Gửi đúng cấu trúc trường rõ ràng sang cho Worker
   const r = await fetch(WORKER_URL,{
     method:"POST",
     headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      action:"analyze",
-      fileUri:uri,
-      mimeType:mime,
-      desc:state.desc,
-      tone:toneSpec,
-      goal:goalSpec,
-      formula:state.formula,
-      length:lengthSpec,
-      mode:state.mode
-    })
+    body:JSON.stringify({action:"analyze",fileUri:uri,mimeType:mime,desc:state.desc,tone:toneSpec,goal:goalSpec,formula:state.formula,length:lengthSpec,mode:state.mode})
   });
   
   const out = await r.json();
-  if(out.error){ throw new Error(errMsg(out,"Lỗi phân tích")); }
+  if(!r.ok || out.error){ throw new Error(errMsg(out,"Lỗi phân tích cú pháp bài viết")); }
   const parsed = safeParse(out.raw);
-  if(!parsed){ throw new Error("AI trả dữ liệu chưa đầy đủ, hãy thử lại hoặc dùng video ngắn hơn."); }
+  if(!parsed){ throw new Error("AI trả dữ liệu chưa đầy đủ cấu trúc JSON, hãy nhấn 'Viết lại' để thử lại."); }
   return parsed;
 }
 
 async function run(){
   if(!state.videoFile){ setS({error:"Vui lòng tải video lên trước."}); return; }
   if(WORKER_URL.includes("YOUR-WORKER")){ setS({error:"Bạn chưa dán URL Worker vào file (biến WORKER_URL)."}); return; }
-
-  // FIX: chặn file rỗng (0 byte) — backend cũng từ chối nhưng chặn sớm cho rõ ràng
   if(state.videoFile.size === 0){ setS({error:"File rỗng (0 byte). Hãy chọn file khác."}); return; }
 
-  // Cảnh báo sớm nếu video quá nặng (chặn trước khi tải, đỡ chờ vô ích)
   const MB = state.videoFile.size / (1024*1024);
-  if(MB > 80){ setS({error:`Video nặng ${MB.toFixed(0)}MB — quá lớn. Hãy dùng video reel ngắn dưới ~80MB.`}); return; }
+  if(MB > 80){ setS({error:`Video nặng ${MB.toFixed(0)}MB — quá lớn. Hãy dùng file dưới ~80MB.`}); return; }
 
-  setS({loading:true,error:"",result:null,status:"Đang tải video lên... 0%",uploadedUri:null,uploadedMime:null});
+  setS({loading:true,error:"",result:null,status:"Đang tải dữ liệu lên... 0%",uploadedUri:null,uploadedMime:null});
   try{
-    // 1) Upload video (có %)
+    // 1) Giai đoạn Upload
     const upInfo = await uploadWithProgress(state.videoFile, (pct)=>{
-      setS({status:`Đang tải video lên... ${pct}%`});
+      setS({status:`Đang tải dữ liệu lên... ${pct}%`});
     });
-    // FIX: hiện cả detail để thấy lý do thật từ Gemini (vd: key sai, quota)
     if(upInfo.error || !upInfo.name){ throw new Error(errMsg(upInfo,"Tải file thất bại")); }
 
-    // 2) Chờ xử lý xong (ACTIVE) — ảnh thường xong ngay, video cần chờ
+    // 2) FIX LỖI 400 CHÍ MẠNG: Vòng lặp kiểm tra trạng thái ACTIVE thực tế của Google
     let info = upInfo, tries = 0;
-    if(info.state !== "ACTIVE"){
-      setS({status: state.isImage ? "Đang xử lý ảnh..." : "Gemini đang xử lý video..."});
-      const delays = [800,1200,1800,2400,3000];
-      while(info.state !== "ACTIVE" && tries < 40){
-        await new Promise(s=>setTimeout(s, delays[Math.min(tries,delays.length-1)]));
-        const r = await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({action:"status",name:upInfo.name})});
-        info = await r.json();
-        // FIX: nếu backend trả lỗi khi poll thì dừng ngay, đừng quay vô tận
-        if(info.error){ throw new Error(errMsg(info,"Lỗi kiểm tra trạng thái")); }
-        tries++;
-      }
-      if(info.state !== "ACTIVE"){ throw new Error("Xử lý quá lâu, thử file nhẹ hơn."); }
+    setS({status: state.isImage ? "Google đang xử lý ảnh..." : "Google đang convert cấu trúc Video (Đang chờ xử lý)..."});
+    
+    while(info.state !== "ACTIVE" && tries < 60){
+      await new Promise(s=>setTimeout(s, 2000)); // Nghỉ 2 giây trước khi hỏi tiếp
+      const r = await fetch(WORKER_URL,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"status",name:upInfo.name})
+      });
+      info = await r.json();
+      if(info.error){ throw new Error(errMsg(info,"Lỗi kiểm tra trạng thái xử lý")); }
+      if(info.state === "FAILED"){ throw new Error("Google từ chối convert file này do lỗi định dạng mã hóa."); }
+      tries++;
     }
+    
+    if(info.state !== "ACTIVE"){ throw new Error("Google xử lý file quá lâu, vui lòng thử lại bằng file ngắn hơn."); }
 
-    // Lưu file đã upload để nút "Viết lại" dùng lại, KHÔNG cần upload lần nữa
     state.uploadedUri = info.uri;
     state.uploadedMime = info.mimeType;
 
-    // 3) Phân tích & viết content
-    setS({status:"Chuyên gia AI đang viết content..."});
+    // 3) Giai đoạn AI viết bài viết
+    setS({status:"Chuyên gia AI đang phân tích & xuất bản bài viết..."});
     const parsed = await callAnalyze(info.uri, info.mimeType);
     setS({loading:false,status:"",result:parsed});
   }catch(e){
-    setS({loading:false,status:"",error:"Lỗi: "+e.message});
+    setS({loading:false,status:"",error: e.message});
   }
 }
 
-// VIẾT LẠI: dùng lại file đã upload, gọi analyze lần nữa để AI ra content khác
 async function regenerate(){
-  if(!state.uploadedUri){ setS({error:"Chưa có file để viết lại. Hãy phân tích trước."}); return; }
-  setS({loading:true,error:"",result:null,status:"AI đang viết lại nội dung khác..."});
+  if(!state.uploadedUri){ setS({error:"Chưa có file gốc để viết lại."}); return; }
+  setS({loading:true,error:"",result:null,status:"AI đang tái cấu trúc bài viết mới..."});
   try{
     const parsed = await callAnalyze(state.uploadedUri, state.uploadedMime);
     setS({loading:false,status:"",result:parsed});
   }catch(e){
-    setS({loading:false,status:"",error:"Lỗi: "+e.message});
+    setS({loading:false,status:"",error: e.message});
   }
 }
 
 function copy(t,btn){ navigator.clipboard?.writeText(t); const o=btn.textContent; btn.textContent="✓ Đã chép"; setTimeout(()=>btn.textContent=o,1500); }
 
-// Parse JSON chịu lỗi: nếu Gemini trả thiếu đuôi, cố gắng cứu phần đọc được
 function safeParse(raw){
   if(!raw) return null;
   let s = raw.trim().replace(/```json|```/g,"").trim();
   try { return JSON.parse(s); } catch(_){}
-  // Cắt tới dấu } cuối cùng rồi đóng ngoặc còn thiếu
   try {
     let lastBrace = s.lastIndexOf("}");
     if(lastBrace > -1){ s = s.slice(0, lastBrace+1); }
-    // Đếm ngoặc để bù phần thiếu
     const openCurly=(s.match(/{/g)||[]).length, closeCurly=(s.match(/}/g)||[]).length;
     const openSq=(s.match(/\[/g)||[]).length, closeSq=(s.match(/\]/g)||[]).length;
     s += "]".repeat(Math.max(0,openSq-closeSq));
@@ -352,9 +297,9 @@ function safeParse(raw){
 function render(){
   const s = state;
   const resHtml = s.loading
-    ? `<div class="empty"><div class="spinner"></div><div id="statusText" style="margin-top:14px">${s.status||"Đang xử lý..."}</div></div>`
+    ? `<div class="empty"><div class="spinner"></div><div id="statusText" style="margin-top:14px; font-weight:600; color:#3a4a6b;">${s.status||"Đang xử lý..."}</div></div>`
     : s.result ? renderResult(s.result)
-    : `<div class="empty">🎬 Tải video và nhấn phân tích để nhận content do chuyên gia AI viết.</div>`;
+    : `<div class="empty">🎬 Tải video / hình ảnh lên và nhấn nút phân tích để nhận nội dung.</div>`;
 
   const toneList = s.mode==="personal"?tonesPersonal:tones;
   const goalList = s.mode==="personal"?goalsPersonal:goals;
@@ -366,7 +311,7 @@ function render(){
         <div class="logo">🎬</div>
         <div><div class="title">${s.mode==="personal"?"Viral Status AI":"Reel Studio AI"}</div><div class="sub">${s.mode==="personal"?"CÁ NHÂN — FACEBOOK VIRAL":"TOULOUSE — CONTENT GENERATOR"}</div></div>
       </div>
-      <div class="glass live"><span class="dot"></span> GEMINI</div>
+      <div class="glass live"><span class="dot"></span> GEMINI ONLINE</div>
     </div>
 
     <div class="glass mode-bar">
@@ -376,40 +321,40 @@ function render(){
     <div class="grid">
       <div class="col">
         <div class="glass card">
-          <div class="label">${s.mode==="personal"?"TẢI ẢNH HOẶC VIDEO LÊN":"TẢI VIDEO LÊN"}</div>
+          <div class="label">TẢI PHƯƠNG TIỆN LÊN</div>
           ${s.videoUrl
             ? (s.isImage
                 ? `<img src="${s.videoUrl}" style="width:100%;border-radius:18px;display:block"><div class="status">${s.videoFile?.name||""}</div>`
                 : `<video src="${s.videoUrl}" controls></video><div class="status">${s.videoFile?.name||""}</div>`)
-            : `<div class="drop" onclick="document.getElementById('f').click()"><div style="font-size:34px">⬆️</div><b>Nhấn để chọn ${s.mode==="personal"?"ảnh / video":"video"}</b><br><span>${s.mode==="personal"?"JPG, PNG, MP4, MOV":"MP4, MOV, WebM"} — nên dưới ~50MB</span></div>`}
-          <input id="f" type="file" accept="${s.mode==="personal"?"image/*,video/*":"video/*"}" style="display:none" onchange="onFile(event)">
+            : `<div class="drop" onclick="document.getElementById('f').click()"><div style="font-size:34px">⬆️</div><b>Nhấn để chọn file ảnh / video</b><br><span>Hỗ trợ JPG, PNG, MP4, MOV — Dung lượng nên nhỏ hơn ~50MB</span></div>`}
+          <input id="f" type="file" accept="image/*,video/*" style="display:none" onchange="onFile(event)">
         </div>
         <div class="glass card">
-          <div class="label">MÔ TẢ VIDEO (tuỳ chọn)</div>
-          <textarea id="desc" placeholder="VD: Quá trình trang trí bánh kem dâu 2 tầng cho sinh nhật bé gái..." oninput="state.desc=this.value">${s.desc}</textarea>
-          <div class="mini">TÔNG GIỌNG</div>
+          <div class="label">MÔ TẢ NGỮ CẢNH (BẮT BUỘC NẾU LÀ ẢNH)</div>
+          <textarea id="desc" placeholder="VD: Quá trình trang trí bánh kem dâu 2 tầng cho sinh nhật bé gái tại tiệm..." oninput="state.desc=this.value">${s.desc}</textarea>
+          <div class="mini">TÔNG GIỌNG CHỦ ĐẠO</div>
           <div class="chips">${toneList.map(t=>`<button class="chip ${s.tone===t?'on':''}" data-field="tone" data-value="${t}" onclick="selectChip('tone','${t}')">${t}</button>`).join("")}<button class="chip ${s.tone==='__custom__'?'on':''}" data-field="tone" data-value="__custom__" onclick="selectChip('tone','__custom__')">✏️ Tự điền</button></div>
-          ${s.tone==='__custom__'?`<input type="text" placeholder="Nhập tông giọng theo ý bạn, vd: nhẹ nhàng tâm tình..." value="${s.customTone}" oninput="state.customTone=this.value" class="custom-in">`:``}
+          ${s.tone==='__custom__'?`<input type="text" placeholder="Nhập tông giọng, vd: Nhẹ nhàng tâm sự..." value="${s.customTone}" oninput="state.customTone=this.value" class="custom-in">`:``}
           ${s.mode==="personal" ? "" : `
-          <div class="mini">CÔNG THỨC VIẾT</div>
+          <div class="mini">CÔNG THỨC COPYWRITING</div>
           <div class="chips">${formulas.map(f=>`<button class="chip ${s.formula===f.id?'on':''}" data-field="formula" data-value="${f.id}" onclick="selectChip('formula','${f.id}')">${f.id}</button>`).join("")}</div>
           ${(()=>{ const f=formulas.find(x=>x.id===s.formula); return `<div class="formula-box"><div class="formula-desc">${f.desc}</div><div class="formula-ex"><b>Ví dụ:</b> ${f.example}</div></div>`; })()}`}
-          <div class="mini">ĐỘ DÀI CONTENT</div>
+          <div class="mini">ĐỘ DÀI VĂN BẢN</div>
           <div class="chips">${lengths.map(l=>`<button class="chip ${s.length===l.id?'on':''}" data-field="length" data-value="${l.id}" onclick="selectChip('length','${l.id}')">${l.id}</button>`).join("")}</div>
           ${s.length==="Tự điền"
-            ? `<input id="cw" type="number" min="10" max="1000" placeholder="Nhập số từ, vd: 100" value="${s.customWords}" oninput="state.customWords=this.value" style="width:100%;margin-top:10px;border-radius:14px;border:1px solid rgba(58,74,107,.15);padding:12px 14px;font-size:16px;background:rgba(255,255,255,.6);color:#2a3650">`
+            ? `<input id="cw" type="number" min="10" max="1000" placeholder="Nhập số từ mong muốn..." value="${s.customWords}" oninput="state.customWords=this.value" style="width:100%;margin-top:10px;border-radius:14px;border:1px solid rgba(58,74,107,.15);padding:12px 14px;font-size:16px;background:rgba(255,255,255,.6);color:#2a3650">`
             : `<div class="length-hint">${lengths.find(l=>l.id===s.length).hint}</div>`}
-          <div class="mini">MỤC TIÊU</div>
+          <div class="mini">MỤC TIÊU NỘI DUNG</div>
           <div class="chips">${goalList.map(g=>`<button class="chip ${s.goal===g?'on':''}" data-field="goal" data-value="${g}" onclick="selectChip('goal','${g}')">${g}</button>`).join("")}<button class="chip ${s.goal==='__custom__'?'on':''}" data-field="goal" data-value="__custom__" onclick="selectChip('goal','__custom__')">✏️ Tự điền</button></div>
-          ${s.goal==='__custom__'?`<input type="text" placeholder="Nhập mục tiêu theo ý bạn, vd: kêu gọi đăng ký lớp học..." value="${s.customGoal}" oninput="state.customGoal=this.value" class="custom-in">`:``}
-          <button class="btn" ${s.loading?'disabled':''} onclick="run()">${s.loading?'⏳ Đang xử lý...':'✨ Phân tích & Viết content'}</button>
+          ${s.goal==='__custom__'?`<input type="text" placeholder="Nhập mục tiêu cụ thể..." value="${s.customGoal}" oninput="state.customGoal=this.value" class="custom-in">`:``}
+          <button class="btn" ${s.loading?'disabled':''} onclick="run()">${s.loading?'⏳ Hệ thống đang chạy...':'✨ Phân tích & Viết content'}</button>
           ${s.error?`<div class="err">${s.error}</div>`:''}
         </div>
       </div>
       <div class="glass right">
         <div class="label" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-          <span>✨ CONTENT REEL ĐỀ XUẤT</span>
-          ${(s.result && !s.loading) ? `<button class="copy" style="margin-top:0" onclick="regenerate()">🔄 Viết lại</button>` : ``}
+          <span>✨ KẾT QUẢ XUẤT BẢN</span>
+          ${(s.result && !s.loading) ? `<button class="copy" style="margin-top:0" onclick="regenerate()">🔄 Viết lại bản khác</button>` : ``}
         </div>
         ${resHtml}
       </div>
@@ -418,30 +363,24 @@ function render(){
 }
 
 function renderResult(r){
-  // FIX: escape đúng thứ tự — backslash TRƯỚC, rồi backtick, nháy đơn, và newline.
-  // Nếu không escape newline, caption nhiều dòng sẽ phá vỡ chuỗi trong onclick="copy('...')".
-  const esc = (x)=>String(x)
-    .replace(/\\/g,"\\\\")
-    .replace(/`/g,"'")
-    .replace(/'/g,"\\'")
-    .replace(/\r?\n/g,"\\n");
+  const esc = (x)=>String(x).replace(/\\/g,"\\\\").replace(/`/g,"'").replace(/'/g,"\\'").replace(/\r?\n/g,"\\n");
   return `
-    <div class="res-block"><div class="res-label">PHÂN TÍCH VIDEO</div><div style="font-size:14px;color:#2a3650;line-height:1.6">${r.analysis||""}</div></div>
-    <div class="res-block"><div class="res-label">HOOK MỞ ĐẦU</div>
+    <div class="res-block"><div class="res-label">PHÂN TÍCH THỊ GIÁC</div><div style="font-size:14px;color:#2a3650;line-height:1.6">${r.analysis||""}</div></div>
+    <div class="res-block"><div class="res-label">HOOK THU HÚT NGƯỜI XEM</div>
       ${(r.hooks||[]).map(h=>`<div class="item"><div class="txt">${h}</div><button class="copy" onclick="copy('${esc(h)}',this)">Chép</button></div>`).join("")}</div>
-    <div class="res-block"><div class="res-label">CAPTION</div>
-      ${(r.captions||[]).map(c=>`<div class="cap"><div class="style">${c.style||""}</div><div class="text">${c.text||""}</div><button class="copy" onclick="copy('${esc(c.text)}',this)">📋 Sao chép</button></div>`).join("")}</div>
-    <div class="res-block"><div class="res-label">HASHTAG</div>
+    <div class="res-block"><div class="res-label">NỘI DUNG BÀI VIẾT (CAPTION)</div>
+      ${(r.captions||[]).map(c=>`<div class="cap"><div class="style">${c.style||""}</div><div class="text">${c.text||""}</div><button class="copy" onclick="copy('${esc(c.text)}',this)">📋 Sao chép bài viết</button></div>`).join("")}</div>
+    <div class="res-block"><div class="res-label">HASHTAGS BÀI VIẾT</div>
       <div class="chips" style="margin-bottom:8px">${(r.hashtags||[]).map(t=>`<span class="tag">${t.startsWith('#')?t:'#'+t}</span>`).join("")}</div>
-      <button class="copy" onclick="copy('${esc((r.hashtags||[]).map(t=>t.startsWith('#')?t:'#'+t).join(' '))}',this)">📋 Chép tất cả</button></div>
-    <div class="res-block"><div class="res-label">MẸO LÊN XU HƯỚNG</div>
+      <button class="copy" onclick="copy('${esc((r.hashtags||[]).map(t=>t.startsWith('#')?t:'#'+t).join(' '))}',this)">📋 Chép tất cả bộ tag</button></div>
+    <div class="res-block"><div class="res-label">MẸO TỐI ƯU TƯƠNG TÁC XU HƯỚNG</div>
       ${(r.tips||[]).map(t=>`<div style="font-size:13px;color:#2a3650;line-height:1.6;margin-bottom:6px">• ${t}</div>`).join("")}</div>`;
 }
 
 function onFile(e){
   const f = e.target.files[0]; if(!f) return;
   state.videoFile = f;
-  state.isImage = f.type.startsWith("image");
+  state.isImage = f.type.startsWith("image") || f.name.endsWith(".jpg") || f.name.endsWith(".jpeg") || f.name.endsWith(".png");
   state.videoUrl = URL.createObjectURL(f);
   state.result=null; state.error="";
   render();
